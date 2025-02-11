@@ -1,3 +1,5 @@
+<img align="center" alt="coding" src="banner.png">
+
 # React & React Native Component Generator
 
 A simple web application that allows users to generate React and React Native components based on user-defined state variables and API endpoints. This tool helps streamline the development process by automating the boilerplate code generation for components.
