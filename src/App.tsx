@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Code, FileDown, Globe, Shield, Play, Eye } from 'lucide-react';
+import { CopyToClipboard } from 'react-copy-to-clipboard'; // Import the library
+import { Plus, Minus, Code, FileDown, Globe, Shield } from 'lucide-react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import  {LivePreview}  from './components/LivePreview';
+import { LivePreview } from './components/LivePreview';
 
 SyntaxHighlighter.registerLanguage('typescript', typescript);
 
@@ -33,8 +34,8 @@ function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [apiEndpoints, setApiEndpoints] = useState<ApiEndpoint[]>([]);
   const [showValidation, setShowValidation] = useState<number | null>(null);
-  const [showLivePreview, setShowLivePreview] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
+  const [isReactNative, setIsReactNative] = useState(false); // New state for React Native toggle
 
   const addStateVariable = () => {
     setStateVariables([...stateVariables, { 
@@ -79,6 +80,24 @@ function App() {
     const newEndpoints = [...apiEndpoints];
     newEndpoints[index] = { ...newEndpoints[index], [field]: value };
     setApiEndpoints(newEndpoints);
+  };
+
+  const handleInput = (index: number, type: 'state' | 'api', field: string, value: string) => {
+    if (type === 'state') {
+      if (field === 'name') {
+        updateStateVariable(index, 'name', value);
+      } else if (field === 'type') {
+        updateStateVariable(index, 'type', value as StateVariable['type']);
+      }
+    } else if (type === 'api') {
+      if (field === 'name') {
+        updateApiEndpoint(index, 'name', value);
+      } else if (field === 'method') {
+        updateApiEndpoint(index, 'method', value as ApiEndpoint['method']);
+      } else if (field === 'url') {
+        updateApiEndpoint(index, 'url', value);
+      }
+    }
   };
 
   const generateValidationCode = (variable: StateVariable) => {
@@ -151,29 +170,26 @@ function App() {
 
     const inputFields = includeInputs
       ? stateVariables.map(variable => `
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ fontSize: 16 }}>
             ${variable.name}
             ${variable.validation?.required ? ' *' : ''}
-          </label>
-          <input
-            type="${variable.type === 'boolean' ? 'checkbox' : variable.type === 'number' ? 'number' : 'text'}"
+          </Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 4 }}
             value={${variable.name}}
-            onChange={(e) => set${variable.name.charAt(0).toUpperCase() + variable.name.slice(1)}(${
-              variable.type === 'boolean' 
-                ? 'e.target.checked' 
-                : variable.type === 'number' 
-                  ? 'Number(e.target.value)' 
-                  : 'e.target.value'
-            })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            onChangeText={(text) => set${variable.name.charAt(0).toUpperCase() + variable.name.slice(1)}(text)}
+            keyboardType={${variable.type === 'number' ? "'numeric'" : "undefined"}}
           />
-        </div>`
+        </View>`
       ).join('\n')
       : '';
 
-    return `import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+    const componentImport = isReactNative ? `import { View, Text, TextInput, Button } from 'react-native';
+import axios from 'axios';` : `import React, { useState, useEffect } from 'react';
+import axios from 'axios';`;
+
+    return `${componentImport}
 
 function ${componentName}() {
   // State initialization
@@ -194,44 +210,36 @@ function ${componentName}() {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">${componentName}</h1>
+    <View style={{ padding: 16 }}>
+      <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 16 }}>${componentName}</Text>
       
-      <form onSubmit={(e) => {
-        e.preventDefault();
-        const errors = validate();
-        if (Object.keys(errors).length === 0) {
-          // Form is valid, proceed with submission
-          console.log('Form is valid');
-        } else {
-          console.log('Validation errors:', errors);
-        }
-      }}>
+      <View>
+        <Button
+          title="Submit"
+          onPress={() => {
+            const errors = validate();
+            if (Object.keys(errors).length === 0) {
+              // Form is valid, proceed with submission
+              console.log('Form is valid');
+            } else {
+              console.log('Validation errors:', errors);
+            }
+          }}
+        />
         ${inputFields}
-        
-        <div className="mt-6">
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            Submit
-          </button>
-        </div>
-      </form>
+      </View>
 
       {/* API Data Display */}
       ${apiEndpoints.map(endpoint => `
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold mb-3">${endpoint.name} Data</h2>
-        {${endpoint.name}Loading && <p>Loading...</p>}
-        {${endpoint.name}Error && <p className="text-red-500">Error: {${endpoint.name}Error}</p>}
+      <View style={{ marginTop: 16 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold' }}>${endpoint.name} Data</Text>
+        {${endpoint.name}Loading && <Text>Loading...</Text>}
+        {${endpoint.name}Error && <Text style={{ color: 'red' }}>Error: {${endpoint.name}Error}</Text>}
         {${endpoint.name}Data && (
-          <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto">
-            {JSON.stringify(${endpoint.name}Data, null, 2)}
-          </pre>
+          <Text>{JSON.stringify(${endpoint.name}Data, null, 2)}</Text>
         )}
-      </div>`).join('\n')}
-    </div>
+      </View>`).join('\n')}
+    </View>
   );
 }
 
@@ -243,7 +251,7 @@ export default ${componentName};`;
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h1 className="text-2xl font-bold mb-6">React Component Generator</h1>
+            <h1 className="text-2xl font-bold mb-6">React or React Native Component Generator</h1>
             
             {/* Component Name */}
             <div className="mb-6">
@@ -279,13 +287,13 @@ export default ${componentName};`;
                     <input
                       type="text"
                       value={variable.name}
-                      onChange={(e) => updateStateVariable(index, 'name', e.target.value)}
+                      onChange={(e) => handleInput(index, 'state', 'name', e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="Variable name"
                     />
                     <select
                       value={variable.type}
-                      onChange={(e) => updateStateVariable(index, 'type', e.target.value as StateVariable['type'])}
+                      onChange={(e) => handleInput(index, 'state', 'type', e.target.value)}
                       className="px-3 py-2 border border-gray-300 rounded-md"
                     >
                       <option value="string">String</option>
@@ -405,13 +413,13 @@ export default ${componentName};`;
                   <input
                     type="text"
                     value={endpoint.name}
-                    onChange={(e) => updateApiEndpoint(index, 'name', e.target.value)}
+                    onChange={(e) => handleInput(index, 'api', 'name', e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
                     placeholder="Endpoint name"
                   />
                   <select
                     value={endpoint.method}
-                    onChange={(e) => updateApiEndpoint(index, 'method', e.target.value as ApiEndpoint['method'])}
+                    onChange={(e) => handleInput(index, 'api', 'method', e.target.value)}
                     className="px-3 py-2 border border-gray-300 rounded-md"
                   >
                     <option value="GET">GET</option>
@@ -422,7 +430,7 @@ export default ${componentName};`;
                   <input
                     type="text"
                     value={endpoint.url}
-                    onChange={(e) => updateApiEndpoint(index, 'url', e.target.value)}
+                    onChange={(e) => handleInput(index, 'api', 'url', e.target.value)}
                     className="flex-2 px-3 py-2 border border-gray-300 rounded-md"
                     placeholder="API URL"
                   />
@@ -451,6 +459,21 @@ export default ${componentName};`;
               </label>
             </div>
 
+            {/* React Native Toggle */}
+            <div className="mb-6">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={isReactNative}
+                  onChange={(e) => setIsReactNative(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Generate for React Native
+                </span>
+              </label>
+            </div>
+
             {/* Actions */}
             <div className="flex gap-4">
               <button
@@ -465,12 +488,6 @@ export default ${componentName};`;
               >
                 <FileDown size={16} className="mr-2" /> Generate Component
               </button>
-              {/* <button
-                onClick={() => setShowLivePreview(!showLivePreview)}
-                className="flex items-center px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600"
-              >
-                <Eye size={16} className="mr-2" /> Live Preview
-              </button> */}
             </div>
           </div>
 
@@ -479,6 +496,11 @@ export default ${componentName};`;
             {showPreview && (
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold mb-4">Generated Code</h2>
+                <CopyToClipboard text={generatedCode}>
+                  <button className="mb-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                    Copy Code
+                  </button>
+                </CopyToClipboard>
                 <SyntaxHighlighter 
                   language="typescript"
                   style={atomOneDark}
@@ -493,14 +515,14 @@ export default ${componentName};`;
             )}
 
             {/* Live Preview */}
-            {showLivePreview && generatedCode && (
+            {/* {generatedCode && (
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold mb-4">Live Preview</h2>
                 <div className="border rounded-lg p-4">
                   <LivePreview code={generatedCode} />
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
       </div>
